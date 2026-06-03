@@ -150,7 +150,8 @@ textarea:focus {
 .primary,
 .secondary,
 .ghost,
-.icon-button {
+.icon-button,
+.action-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -216,7 +217,9 @@ textarea:focus {
 
 .sidebar-form h2,
 .tool-panel h2,
-.audit-panel h2 {
+.audit-panel h2,
+.edit-panel h4,
+.history-panel h4 {
   margin: 0;
   font-size: 1rem;
 }
@@ -342,6 +345,17 @@ textarea:focus {
   color: #b42318;
 }
 
+.action-button {
+  flex: 0 0 auto;
+  border-color: #cdd7df;
+  background: #ffffff;
+  color: #20303d;
+}
+
+.action-button.danger {
+  color: #b42318;
+}
+
 .secret-value {
   position: relative;
   margin: 14px 0 0;
@@ -351,6 +365,51 @@ textarea:focus {
   background: #0e1a24;
   color: #d8f3ec;
   border-radius: 7px;
+}
+
+.edit-panel,
+.history-panel {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+  border-top: 1px solid #edf2f7;
+  padding-top: 14px;
+}
+
+.compact-button {
+  min-height: 34px;
+  padding: 0 10px;
+  font-size: 0.9rem;
+}
+
+.version-row {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #edf2f7;
+  border-radius: 7px;
+  padding: 12px;
+}
+
+.version-row strong,
+.version-row span,
+.version-row time {
+  display: block;
+}
+
+.version-row span,
+.version-row time,
+.empty-history {
+  color: #667785;
+}
+
+.version-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.history-value {
+  margin-top: 0;
 }
 
 .hide-button {
@@ -417,7 +476,8 @@ textarea:focus {
     grid-template-columns: 1fr;
   }
 
-  .icon-button {
+  .icon-button,
+  .action-button {
     width: 100%;
   }
 }

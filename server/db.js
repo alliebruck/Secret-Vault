@@ -52,6 +52,21 @@ db.exec(`
     UNIQUE(project_id, name, environment)
   );
 
+  CREATE TABLE IF NOT EXISTS secret_versions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    secret_id INTEGER NOT NULL REFERENCES secrets(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    version_number INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    environment TEXT NOT NULL,
+    encrypted_value TEXT NOT NULL,
+    notes TEXT NOT NULL DEFAULT '',
+    expires_at TEXT,
+    reason TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(secret_id, version_number)
+  );
+
   CREATE TABLE IF NOT EXISTS audit_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

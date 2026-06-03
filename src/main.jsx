@@ -4,14 +4,19 @@ import {
   Clipboard,
   Eye,
   EyeOff,
+  History,
   KeyRound,
   Lock,
   LogOut,
+  Pencil,
   Plus,
   RefreshCcw,
+  RotateCcw,
+  Save,
   Search,
   ShieldCheck,
-  Trash2
+  Trash2,
+  X
 } from "lucide-react";
 import "./styles.css";
 
@@ -331,7 +336,30 @@ function SecretForm({ projects, onCreated }) {
 function SecretCard({ secret, onChanged, onNotice }) {
   const [password, setPassword] = useState("");
   const [revealed, setRevealed] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [versions, setVersions] = useState([]);
+  const [versionValues, setVersionValues] = useState({});
   const [error, setError] = useState("");
+  const [editForm, setEditForm] = useState({
+    name: secret.name,
+    environment: secret.environment,
+    value: "",
+    notes: secret.notes || "",
+    expiresAt: secret.expires_at || "",
+    reason: "Rotated secret value"
+  });
+
+  useEffect(() => {
+    setEditForm({
+      name: secret.name,
+      environment: secret.environment,
+      value: revealed || "",
+      notes: secret.notes || "",
+      expiresAt: secret.expires_at || "",
+      reason: "Rotated secret value"
+    });
+  }, [secret, revealed]);
 
   async function reveal(action = "view") {
     setError("");
@@ -356,6 +384,69 @@ function SecretCard({ secret, onChanged, onNotice }) {
     onChanged();
   }
 
+  async function saveEdit(event) {
+    event.preventDefault();
+    setError("");
+    try {
+      await api(`/secrets/${secret.id}`, {
+        method: "PUT",
+        body: { ...editForm, password }
+      });
+      setEditing(false);
+      setRevealed("");
+      onNotice(`Updated ${editForm.name}`);
+      onChanged();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function loadVersions() {
+    setError("");
+    try {
+      const data = await api(`/secrets/${secret.id}/versions`);
+      setVersions(data.versions);
+      setShowHistory(true);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function revealVersion(versionId) {
+    setError("");
+    try {
+      const data = await api(`/secrets/${secret.id}/versions/${versionId}/reveal`, {
+        method: "POST",
+        body: { password }
+      });
+      setVersionValues((current) => ({ ...current, [versionId]: data.value }));
+      onChanged();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function restoreVersion(version) {
+    setError("");
+    try {
+      await api(`/secrets/${secret.id}/versions/${version.id}/restore`, {
+        method: "POST",
+        body: { password }
+      });
+      setShowHistory(false);
+      setVersionValues({});
+      setRevealed("");
+      onNotice(`Restored ${secret.name} to v${version.version_number}`);
+      onChanged();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  function updateEdit(field, value) {
+    setEditForm((current) => ({ ...current, [field]: value }));
+  }
+
   const expired = secret.expires_at && new Date(secret.expires_at) < new Date();
 
   return (
@@ -375,9 +466,11 @@ function SecretCard({ secret, onChanged, onNotice }) {
           value={password}
           onChange={(event) => setPassword(event.target.value)}
         />
-        <button className="icon-button" title="Reveal secret" onClick={() => reveal("view")}><Eye size={17} /></button>
-        <button className="icon-button" title="Copy secret" onClick={() => reveal("copy")}><Clipboard size={17} /></button>
-        <button className="icon-button danger" title="Delete secret" onClick={remove}><Trash2 size={17} /></button>
+        <button className="action-button" title="Reveal secret" onClick={() => reveal("view")}><Eye size={17} /> Reveal</button>
+        <button className="action-button" title="Copy secret" onClick={() => reveal("copy")}><Clipboard size={17} /> Copy</button>
+        <button className="action-button" title="Edit secret" onClick={() => setEditing((current) => !current)}><Pencil size={17} /> Edit</button>
+        <button className="action-button" title="Version history" onClick={showHistory ? () => setShowHistory(false) : loadVersions}><History size={17} /> History</button>
+        <button className="action-button danger" title="Delete secret" onClick={remove}><Trash2 size={17} /> Delete</button>
       </div>
       {revealed && (
         <pre className="secret-value">
@@ -385,8 +478,87 @@ function SecretCard({ secret, onChanged, onNotice }) {
           {revealed}
         </pre>
       )}
+      {editing && (
+        <form className="edit-panel" onSubmit={saveEdit}>
+          <div className="panel-heading">
+            <h4>Edit secret</h4>
+            <button className="ghost compact-button" type="button" onClick={() => setEditing(false)}>
+              <X size={16} /> Cancel
+            </button>
+          </div>
+          <div className="form-grid">
+            <label>
+              Secret name
+              <input value={editForm.name} onChange={(event) => updateEdit("name", event.target.value)} required />
+            </label>
+            <label>
+              Environment
+              <select value={editForm.environment} onChange={(event) => updateEdit("environment", event.target.value)}>
+                <option value="dev">dev</option>
+                <option value="staging">staging</option>
+                <option value="prod">prod</option>
+              </select>
+            </label>
+            <label>
+              Rotation date
+              <input type="date" value={editForm.expiresAt || ""} onChange={(event) => updateEdit("expiresAt", event.target.value)} />
+            </label>
+            <label>
+              Change reason
+              <input value={editForm.reason} onChange={(event) => updateEdit("reason", event.target.value)} />
+            </label>
+          </div>
+          <label>
+            Secret value
+            <textarea value={editForm.value} onChange={(event) => updateEdit("value", event.target.value)} required />
+          </label>
+          <label>
+            Rotation notes
+            <textarea value={editForm.notes} onChange={(event) => updateEdit("notes", event.target.value)} />
+          </label>
+          <button className="primary" type="submit"><Save size={17} /> Save new version</button>
+        </form>
+      )}
+      {showHistory && (
+        <VersionHistory
+          versions={versions}
+          versionValues={versionValues}
+          onReveal={revealVersion}
+          onRestore={restoreVersion}
+        />
+      )}
       {error && <p className="error">{error}</p>}
     </article>
+  );
+}
+
+function VersionHistory({ versions, versionValues, onReveal, onRestore }) {
+  if (!versions.length) {
+    return <div className="history-panel empty-history">No previous versions yet.</div>;
+  }
+
+  return (
+    <div className="history-panel">
+      <h4>Version history</h4>
+      {versions.map((version) => (
+        <div className="version-row" key={version.id}>
+          <div>
+            <strong>v{version.version_number}: {version.name}</strong>
+            <span>{version.environment} / {version.reason || "No reason"}</span>
+            <time>{new Date(version.created_at).toLocaleString()}</time>
+          </div>
+          <div className="version-actions">
+            <button className="secondary compact-button" type="button" onClick={() => onReveal(version.id)}>
+              <Eye size={16} /> Reveal
+            </button>
+            <button className="secondary compact-button" type="button" onClick={() => onRestore(version)}>
+              <RotateCcw size={16} /> Restore
+            </button>
+          </div>
+          {versionValues[version.id] && <pre className="secret-value history-value">{versionValues[version.id]}</pre>}
+        </div>
+      ))}
+    </div>
   );
 }
 

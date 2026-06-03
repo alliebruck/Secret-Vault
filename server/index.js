@@ -21,7 +21,12 @@ app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin(origin, callback) {
+      if (!origin || /^http:\/\/localhost:\d+$/.test(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error("Not allowed by CORS"));
+    },
     credentials: true
   })
 );
@@ -76,6 +81,39 @@ function createSession(userId, res) {
   `).run(userId, tokenHash, expiresAt);
 
   res.cookie("session", token, sessionCookieOptions());
+}
+
+function getSecretForUser(secretId, userId) {
+  return db
+    .prepare("SELECT * FROM secrets WHERE id = ? AND user_id = ?")
+    .get(secretId, userId);
+}
+
+function getNextSecretVersion(secretId) {
+  const row = db
+    .prepare("SELECT COALESCE(MAX(version_number), 0) + 1 AS next_version FROM secret_versions WHERE secret_id = ?")
+    .get(secretId);
+  return row.next_version;
+}
+
+function saveSecretVersion(secret, reason) {
+  db.prepare(`
+    INSERT INTO secret_versions (
+      secret_id, user_id, version_number, name, environment,
+      encrypted_value, notes, expires_at, reason
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    secret.id,
+    secret.user_id,
+    getNextSecretVersion(secret.id),
+    secret.name,
+    secret.environment,
+    secret.encrypted_value,
+    secret.notes,
+    secret.expires_at,
+    reason
+  );
 }
 
 app.get("/api/health", (_req, res) => {
@@ -202,9 +240,7 @@ app.post("/api/secrets", requireAuth, async (req, res) => {
 });
 
 app.post("/api/secrets/:id/reveal", requireAuth, async (req, res) => {
-  const secret = db
-    .prepare("SELECT * FROM secrets WHERE id = ? AND user_id = ?")
-    .get(req.params.id, req.user.id);
+  const secret = getSecretForUser(req.params.id, req.user.id);
   if (!secret) return res.status(404).json({ error: "Secret not found" });
 
   try {
@@ -220,10 +256,142 @@ app.post("/api/secrets/:id/reveal", requireAuth, async (req, res) => {
   }
 });
 
+app.put("/api/secrets/:id", requireAuth, async (req, res) => {
+  const secret = getSecretForUser(req.params.id, req.user.id);
+  if (!secret) return res.status(404).json({ error: "Secret not found" });
+
+  const { name, environment, value, notes, expiresAt, password, reason } = req.body;
+  if (!name || !environment || !value || !password) {
+    return res.status(400).json({ error: "Name, environment, value, and password are required" });
+  }
+
+  let transactionStarted = false;
+  try {
+    const vaultKey = await verifyPasswordAndGetVaultKey(req.user.id, password);
+    const encryptedValue = encryptJson(String(value), vaultKey);
+
+    db.prepare("BEGIN").run();
+    transactionStarted = true;
+    saveSecretVersion(secret, reason || "Manual edit");
+    db.prepare(`
+      UPDATE secrets
+      SET name = ?, environment = ?, encrypted_value = ?, notes = ?,
+          expires_at = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND user_id = ?
+    `).run(
+      String(name).trim(),
+      String(environment).trim(),
+      encryptedValue,
+      String(notes || "").trim(),
+      expiresAt || null,
+      secret.id,
+      req.user.id
+    );
+    db.prepare("COMMIT").run();
+    transactionStarted = false;
+
+    logAudit(req.user.id, "edited", "secret", secret.id, {
+      previousName: secret.name,
+      name,
+      environment
+    });
+    res.json({ ok: true });
+  } catch (error) {
+    if (transactionStarted) db.prepare("ROLLBACK").run();
+    if (String(error.message).includes("UNIQUE")) {
+      return res.status(409).json({ error: "A secret with that project, name, and environment already exists" });
+    }
+    res.status(401).json({ error: "Password check failed" });
+  }
+});
+
+app.get("/api/secrets/:id/versions", requireAuth, (req, res) => {
+  const secret = getSecretForUser(req.params.id, req.user.id);
+  if (!secret) return res.status(404).json({ error: "Secret not found" });
+
+  const versions = db.prepare(`
+    SELECT id, secret_id, version_number, name, environment, notes, expires_at, reason, created_at
+    FROM secret_versions
+    WHERE secret_id = ? AND user_id = ?
+    ORDER BY version_number DESC
+  `).all(secret.id, req.user.id);
+
+  res.json({ versions });
+});
+
+app.post("/api/secrets/:id/versions/:versionId/reveal", requireAuth, async (req, res) => {
+  const secret = getSecretForUser(req.params.id, req.user.id);
+  if (!secret) return res.status(404).json({ error: "Secret not found" });
+
+  const version = db
+    .prepare("SELECT * FROM secret_versions WHERE id = ? AND secret_id = ? AND user_id = ?")
+    .get(req.params.versionId, secret.id, req.user.id);
+  if (!version) return res.status(404).json({ error: "Version not found" });
+
+  try {
+    const vaultKey = await verifyPasswordAndGetVaultKey(req.user.id, req.body.password || "");
+    const value = decryptJson(version.encrypted_value, vaultKey);
+    logAudit(req.user.id, "viewed_version", "secret", secret.id, {
+      version: version.version_number,
+      name: version.name,
+      environment: version.environment
+    });
+    res.json({ value });
+  } catch (error) {
+    res.status(401).json({ error: "Password check failed" });
+  }
+});
+
+app.post("/api/secrets/:id/versions/:versionId/restore", requireAuth, async (req, res) => {
+  const secret = getSecretForUser(req.params.id, req.user.id);
+  if (!secret) return res.status(404).json({ error: "Secret not found" });
+
+  const version = db
+    .prepare("SELECT * FROM secret_versions WHERE id = ? AND secret_id = ? AND user_id = ?")
+    .get(req.params.versionId, secret.id, req.user.id);
+  if (!version) return res.status(404).json({ error: "Version not found" });
+
+  let transactionStarted = false;
+  try {
+    await verifyPasswordAndGetVaultKey(req.user.id, req.body.password || "");
+
+    db.prepare("BEGIN").run();
+    transactionStarted = true;
+    saveSecretVersion(secret, `Before restore to v${version.version_number}`);
+    db.prepare(`
+      UPDATE secrets
+      SET name = ?, environment = ?, encrypted_value = ?, notes = ?,
+          expires_at = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND user_id = ?
+    `).run(
+      version.name,
+      version.environment,
+      version.encrypted_value,
+      version.notes,
+      version.expires_at,
+      secret.id,
+      req.user.id
+    );
+    db.prepare("COMMIT").run();
+    transactionStarted = false;
+
+    logAudit(req.user.id, "restored_version", "secret", secret.id, {
+      restoredVersion: version.version_number,
+      name: version.name,
+      environment: version.environment
+    });
+    res.json({ ok: true });
+  } catch (error) {
+    if (transactionStarted) db.prepare("ROLLBACK").run();
+    if (String(error.message).includes("UNIQUE")) {
+      return res.status(409).json({ error: "Restoring would conflict with an existing secret" });
+    }
+    res.status(401).json({ error: "Password check failed" });
+  }
+});
+
 app.delete("/api/secrets/:id", requireAuth, (req, res) => {
-  const secret = db
-    .prepare("SELECT id, name, environment FROM secrets WHERE id = ? AND user_id = ?")
-    .get(req.params.id, req.user.id);
+  const secret = getSecretForUser(req.params.id, req.user.id);
   if (!secret) return res.status(404).json({ error: "Secret not found" });
 
   db.prepare("DELETE FROM secrets WHERE id = ? AND user_id = ?").run(secret.id, req.user.id);
