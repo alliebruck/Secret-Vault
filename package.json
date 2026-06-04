@@ -3,10 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "bin": {
+    "vaultx": "./cli/vaultx.js"
+  },
   "scripts": {
     "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
     "dev:api": "node --watch server/index.js",
     "dev:web": "vite --host localhost",
+    "vaultx": "node cli/vaultx.js",
     "start": "node server/index.js",
     "build": "vite build",
     "preview": "vite preview --host localhost"

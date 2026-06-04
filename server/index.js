@@ -48,7 +48,9 @@ function sessionCookieOptions() {
 }
 
 function requireAuth(req, res, next) {
-  const token = req.cookies.session;
+  const authHeader = req.get("authorization") || "";
+  const bearerToken = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : "";
+  const token = bearerToken || req.cookies.session;
   if (!token) return res.status(401).json({ error: "Authentication required" });
 
   const user = getSessionUser(hashToken(token));
@@ -81,6 +83,7 @@ function createSession(userId, res) {
   `).run(userId, tokenHash, expiresAt);
 
   res.cookie("session", token, sessionCookieOptions());
+  return token;
 }
 
 function getSecretForUser(secretId, userId) {
@@ -135,9 +138,12 @@ app.post("/api/auth/register", authLimiter, async (req, res) => {
       VALUES (?, ?, ?, ?)
     `).run(email.toLowerCase(), passwordHash, envelope.salt, envelope.encryptedVaultKey);
 
-    createSession(result.lastInsertRowid, res);
+    const sessionToken = createSession(result.lastInsertRowid, res);
     logAudit(result.lastInsertRowid, "registered", "user", result.lastInsertRowid);
-    res.status(201).json({ user: { id: result.lastInsertRowid, email: email.toLowerCase() } });
+    res.status(201).json({
+      user: { id: result.lastInsertRowid, email: email.toLowerCase() },
+      sessionToken: req.body.client === "cli" ? sessionToken : undefined
+    });
   } catch (error) {
     res.status(409).json({ error: "That email is already registered" });
   }
@@ -151,9 +157,12 @@ app.post("/api/auth/login", authLimiter, async (req, res) => {
     return res.status(401).json({ error: "Invalid email or password" });
   }
 
-  createSession(user.id, res);
+  const sessionToken = createSession(user.id, res);
   logAudit(user.id, "logged_in", "user", user.id);
-  res.json({ user: { id: user.id, email: user.email } });
+  res.json({
+    user: { id: user.id, email: user.email },
+    sessionToken: req.body.client === "cli" ? sessionToken : undefined
+  });
 });
 
 app.post("/api/auth/logout", requireAuth, (req, res) => {
