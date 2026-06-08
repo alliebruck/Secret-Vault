@@ -149,3 +149,25 @@ npm run vaultx -- run --project billing-api --env dev -- node -e "console.log(pr
 ## Resume Summary
 
 Built a full-stack developer secrets vault with Argon2id authentication, AES-256-GCM encrypted storage, audit logging, encrypted secret version history, and a Node.js CLI for injecting secrets into local development commands.
+
+## Screenshots
+
+### Login Screen
+
+![Login screen for Developer Secret Vault](docs/screenshots/login.png)
+
+### Vault Dashboard
+
+![Vault dashboard with projects, filters, secrets, and audit log](docs/screenshots/dashboard.png)
+
+### Add Secret Flow
+
+![Add encrypted secret form with project, environment, rotation, and password fields](docs/screenshots/secret-form.png)
+
+### Secret Version History
+
+![Secret version history with restore controls and audit trail](docs/screenshots/version-history.png)
+
+### CLI
+
+![CLI listing secrets and injecting a secret into a local command](docs/screenshots/cli.png)

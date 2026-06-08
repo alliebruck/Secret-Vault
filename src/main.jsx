@@ -120,6 +120,7 @@ function VaultScreen({ user, onLogout }) {
   const [projects, setProjects] = useState([]);
   const [secrets, setSecrets] = useState([]);
   const [logs, setLogs] = useState([]);
+  const [showSecretForm, setShowSecretForm] = useState(false);
   const [query, setQuery] = useState("");
   const [environment, setEnvironment] = useState("all");
   const [selectedProject, setSelectedProject] = useState("all");
@@ -139,6 +140,10 @@ function VaultScreen({ user, onLogout }) {
   useEffect(() => {
     refresh();
   }, []);
+
+  useEffect(() => {
+    if (!secrets.length) setShowSecretForm(true);
+  }, [secrets.length]);
 
   const filteredSecrets = useMemo(() => {
     return secrets.filter((secret) => {
@@ -176,7 +181,12 @@ function VaultScreen({ user, onLogout }) {
             <h1>Secrets</h1>
             <p>{secrets.length} stored, {logs.length} recent audit events</p>
           </div>
-          <button className="secondary" onClick={refresh}><RefreshCcw size={17} /> Refresh</button>
+          <div className="topbar-actions">
+            <button className="primary" onClick={() => setShowSecretForm((current) => !current)}>
+              <Plus size={17} /> {showSecretForm ? "Close form" : "Add secret"}
+            </button>
+            <button className="secondary" onClick={refresh}><RefreshCcw size={17} /> Refresh</button>
+          </div>
         </header>
 
         <div className="toolbar">
@@ -200,7 +210,15 @@ function VaultScreen({ user, onLogout }) {
 
         <div className="content-grid">
           <section>
-            <SecretForm projects={projects} onCreated={refresh} />
+            {showSecretForm && (
+              <SecretForm
+                projects={projects}
+                onCreated={() => {
+                  setShowSecretForm(false);
+                  refresh();
+                }}
+              />
+            )}
             <div className="secret-list">
               {filteredSecrets.map((secret) => (
                 <SecretCard

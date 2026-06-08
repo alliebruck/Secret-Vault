@@ -199,7 +199,8 @@ textarea:focus {
 .app-shell {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 300px 1fr;
+  grid-template-columns: 300px minmax(0, 1fr);
+  background: #f5f7f9;
 }
 
 .sidebar {
@@ -209,6 +210,9 @@ textarea:focus {
   display: flex;
   flex-direction: column;
   gap: 22px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
 }
 
 .sidebar-form {
@@ -225,7 +229,9 @@ textarea:focus {
 }
 
 .workspace {
-  padding: 28px;
+  width: min(100%, 1680px);
+  justify-self: center;
+  padding: 28px clamp(28px, 3vw, 56px);
 }
 
 .topbar {
@@ -236,9 +242,16 @@ textarea:focus {
   margin-bottom: 20px;
 }
 
+.topbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .toolbar {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) 190px 150px;
+  grid-template-columns: minmax(320px, 1fr) 190px 150px;
   gap: 12px;
   margin-bottom: 18px;
 }
@@ -260,8 +273,9 @@ textarea:focus {
 
 .content-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
-  gap: 20px;
+  grid-template-columns: minmax(0, 1fr) clamp(320px, 24vw, 420px);
+  align-items: start;
+  gap: clamp(20px, 2vw, 32px);
 }
 
 .tool-panel,
@@ -272,6 +286,11 @@ textarea:focus {
   border: 1px solid #dce3ea;
   border-radius: 8px;
   padding: 18px;
+}
+
+.audit-panel {
+  position: sticky;
+  top: 24px;
 }
 
 .panel-heading {
@@ -291,6 +310,21 @@ textarea:focus {
   display: grid;
   gap: 12px;
   margin-top: 16px;
+}
+
+@media (min-width: 1500px) {
+  .secret-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .empty-state {
+    grid-column: 1 / -1;
+  }
+}
+
+.secret-card {
+  display: grid;
+  gap: 12px;
 }
 
 .secret-main,
@@ -332,6 +366,12 @@ textarea:focus {
 
 .reveal-row {
   margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.reveal-row input {
+  flex: 1 1 220px;
+  min-width: 180px;
 }
 
 .icon-button {
@@ -425,7 +465,7 @@ textarea:focus {
   display: grid;
   gap: 10px;
   margin-top: 14px;
-  max-height: 70vh;
+  max-height: calc(100vh - 150px);
   overflow: auto;
 }
 
@@ -442,19 +482,25 @@ textarea:focus {
   font-size: 0.9rem;
 }
 
-@media (max-width: 980px) {
+@media (max-width: 1120px) {
   .app-shell,
   .content-grid {
     grid-template-columns: 1fr;
   }
 
   .sidebar {
+    position: static;
+    height: auto;
     border-right: 0;
     border-bottom: 1px solid #dce3ea;
   }
 
   .toolbar {
     grid-template-columns: 1fr;
+  }
+
+  .audit-panel {
+    position: static;
   }
 }
 
@@ -470,6 +516,14 @@ textarea:focus {
   .reveal-row {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .topbar-actions {
+    justify-content: stretch;
+  }
+
+  .topbar-actions button {
+    width: 100%;
   }
 
   .form-grid {
