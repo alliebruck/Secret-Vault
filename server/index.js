@@ -167,7 +167,9 @@ app.post("/api/auth/login", authLimiter, async (req, res) => {
 });
 
 app.post("/api/auth/logout", requireAuth, (req, res) => {
-  const token = req.cookies.session;
+  const authHeader = req.get("authorization") || "";
+  const bearerToken = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : "";
+  const token = bearerToken || req.cookies.session;
   db.prepare("DELETE FROM sessions WHERE token_hash = ?").run(hashToken(token));
   res.clearCookie("session", sessionCookieOptions());
   logAudit(req.user.id, "logged_out", "user", req.user.id);

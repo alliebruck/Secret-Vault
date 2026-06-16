@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
@@ -16,6 +16,7 @@ vaultx - Developer Secret Vault CLI
 
 Usage:
   vaultx login [--api http://localhost:4000/api]
+  vaultx logout
   vaultx whoami
   vaultx list [--project NAME] [--env dev]
   vaultx get SECRET_NAME --project NAME --env dev
@@ -134,6 +135,24 @@ async function login(args) {
   console.log(`Logged in as ${data.user.email}`);
 }
 
+async function logout() {
+  const config = await readConfig();
+  if (!config.sessionToken) {
+    await rm(CONFIG_PATH, { force: true });
+    console.log("Already logged out.");
+    return;
+  }
+
+  try {
+    await request("/auth/logout", { method: "POST" });
+  } catch (error) {
+    console.warn(`Could not revoke server session: ${error.message}`);
+  }
+
+  await rm(CONFIG_PATH, { force: true });
+  console.log("Logged out.");
+}
+
 async function whoami() {
   const data = await request("/me");
   console.log(data.user.email);
@@ -226,6 +245,7 @@ async function main() {
   }
 
   if (command === "login") return login(args);
+  if (command === "logout") return logout();
   if (command === "whoami") return whoami();
   if (command === "list") return listSecrets(args);
   if (command === "get") return getSecret(args);

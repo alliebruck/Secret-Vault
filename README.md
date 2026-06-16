@@ -94,6 +94,12 @@ Check the active account:
 npm run vaultx -- whoami
 ```
 
+Logout and remove the local CLI token:
+
+```bash
+npm run vaultx -- logout
+```
+
 List secrets:
 
 ```bash
@@ -139,14 +145,14 @@ npm run vaultx -- run --project billing-api --env dev -- node -e "console.log(pr
 - The app is single-user scoped internally; team sharing and RBAC are not implemented yet.
 - MFA/TOTP is not implemented yet.
 - There is no hosted production deployment.
-- The CLI stores a local session token but does not yet support explicit logout or token rotation.
+- The CLI stores a local session token and supports logout, but token rotation is not implemented yet.
 - This is not intended to replace production systems like HashiCorp Vault, AWS Secrets Manager, Doppler, Infisical, or 1Password Secrets Automation.
 
 ## Roadmap
 
 - TOTP MFA
 - Team workspaces and RBAC
-- CLI logout and token management
+- CLI token rotation
 - Secret import/export
 - Rotation reminder dashboard
 - Encrypted backup flow

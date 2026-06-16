@@ -28,12 +28,13 @@ after(async () => {
   rmSync(tempDir, { recursive: true, force: true });
 });
 
-async function request(path, { method = "GET", body, cookie } = {}) {
+async function request(path, { method = "GET", body, cookie, token } = {}) {
   const response = await fetch(`${baseUrl}${path}`, {
     method,
     headers: {
       "content-type": "application/json",
-      ...(cookie ? { cookie } : {})
+      ...(cookie ? { cookie } : {}),
+      ...(token ? { authorization: `Bearer ${token}` } : {})
     },
     body: body ? JSON.stringify(body) : undefined
   });
@@ -155,5 +156,33 @@ describe("secret version history", () => {
     assert.ok(auditActions.includes("viewed_version"));
     assert.ok(auditActions.includes("restored_version"));
     assert.ok(auditActions.includes("viewed"));
+  });
+});
+
+describe("CLI sessions", () => {
+  test("logout revokes bearer tokens", async () => {
+    const registered = await request("/auth/register", {
+      method: "POST",
+      body: {
+        email: "cli@example.com",
+        password: "correct horse battery staple",
+        client: "cli"
+      }
+    });
+    assert.equal(registered.response.status, 201);
+    assert.ok(registered.data.sessionToken);
+
+    const authenticated = await request("/me", { token: registered.data.sessionToken });
+    assert.equal(authenticated.response.status, 200);
+    assert.equal(authenticated.data.user.email, "cli@example.com");
+
+    const loggedOut = await request("/auth/logout", {
+      method: "POST",
+      token: registered.data.sessionToken
+    });
+    assert.equal(loggedOut.response.status, 200);
+
+    const afterLogout = await request("/me", { token: registered.data.sessionToken });
+    assert.equal(afterLogout.response.status, 401);
   });
 });
