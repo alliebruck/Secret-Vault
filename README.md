@@ -49,6 +49,8 @@ The core security model:
 - CLI sessions use bearer tokens stored locally in `~/.vaultx/config.json`.
 - The CLI never stores the master password.
 
+See [THREAT_MODULE.md](THREAT_MODULE.md) for the full threat model, assumptions, controls, and future hardening plan.
+
 ## Run Locally
 
 ```bash
@@ -69,6 +71,12 @@ http://localhost:5173
 ```
 
 If that port is busy, Vite may use another port such as `5174`.
+
+Run tests:
+
+```bash
+npm test
+```
 
 ## CLI Usage
 
@@ -144,7 +152,6 @@ npm run vaultx -- run --project billing-api --env dev -- node -e "console.log(pr
 - Encrypted backup flow
 - PostgreSQL migration
 - Docker Compose setup
-- Threat model document
 
 ## Resume Summary
 

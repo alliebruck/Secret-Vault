@@ -3,6 +3,7 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import express from "express";
 import rateLimit from "express-rate-limit";
+import { pathToFileURL } from "node:url";
 import { db, getSessionUser, logAudit } from "./db.js";
 import {
   decryptJson,
@@ -13,7 +14,7 @@ import {
   unwrapVaultKey
 } from "./crypto.js";
 
-const app = express();
+export const app = express();
 const PORT = process.env.PORT || 4000;
 const SESSION_DAYS = 7;
 
@@ -421,6 +422,8 @@ app.get("/api/audit-logs", requireAuth, (req, res) => {
   res.json({ logs });
 });
 
-app.listen(PORT, () => {
-  console.log(`API listening on http://localhost:${PORT}`);
-});
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  app.listen(PORT, () => {
+    console.log(`API listening on http://localhost:${PORT}`);
+  });
+}

@@ -7,7 +7,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const dataDir = join(__dirname, "..", "data");
 mkdirSync(dataDir, { recursive: true });
 
-export const db = new DatabaseSync(join(dataDir, "vault.db"));
+export const db = new DatabaseSync(process.env.VAULT_DB_PATH || join(dataDir, "vault.db"));
 
 db.exec(`
   PRAGMA foreign_keys = ON;

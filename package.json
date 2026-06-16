@@ -12,6 +12,7 @@
     "dev:web": "vite --host localhost",
     "vaultx": "node cli/vaultx.js",
     "start": "node server/index.js",
+    "test": "node --experimental-sqlite --test",
     "build": "vite build",
     "preview": "vite preview --host localhost"
   },
@@ -24,9 +25,8 @@
     "express": "^5.1.0",
     "express-rate-limit": "^8.0.1",
     "lucide-react": "^0.468.0",
-    "vite": "^6.0.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
-  },
-  "devDependencies": {}
+    "react-dom": "^19.0.0",
+    "vite": "^8.0.16"
+  }
 }
