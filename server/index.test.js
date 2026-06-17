@@ -48,6 +48,65 @@ function sessionCookie(response) {
   return cookie.split(";")[0];
 }
 
+async function registerUser(email, password = "correct horse battery staple") {
+  const registered = await request("/auth/register", {
+    method: "POST",
+    body: { email, password }
+  });
+  assert.equal(registered.response.status, 201);
+  return {
+    email,
+    password,
+    cookie: sessionCookie(registered.response)
+  };
+}
+
+async function createProject(cookie, name) {
+  const project = await request("/projects", {
+    method: "POST",
+    cookie,
+    body: { name, description: `${name} service` }
+  });
+  assert.equal(project.response.status, 201);
+  return project.data.project;
+}
+
+async function createSecret(cookie, projectId, password, overrides = {}) {
+  const created = await request("/secrets", {
+    method: "POST",
+    cookie,
+    body: {
+      projectId,
+      name: overrides.name || "API_TOKEN",
+      environment: overrides.environment || "dev",
+      value: overrides.value || "secret-value",
+      notes: overrides.notes || "",
+      expiresAt: overrides.expiresAt || null,
+      password
+    }
+  });
+  assert.equal(created.response.status, 201);
+  return created.data.id;
+}
+
+async function editSecret(cookie, secretId, password, overrides = {}) {
+  const edited = await request(`/secrets/${secretId}`, {
+    method: "PUT",
+    cookie,
+    body: {
+      name: overrides.name || "API_TOKEN",
+      environment: overrides.environment || "dev",
+      value: overrides.value || "rotated-secret-value",
+      notes: overrides.notes || "rotated",
+      expiresAt: overrides.expiresAt || null,
+      reason: overrides.reason || "Test rotation",
+      password
+    }
+  });
+  assert.equal(edited.response.status, 200);
+  return edited;
+}
+
 describe("secret version history", () => {
   test("stores previous encrypted versions that can be revealed and restored", async () => {
     const email = "dev@example.com";
@@ -156,6 +215,129 @@ describe("secret version history", () => {
     assert.ok(auditActions.includes("viewed_version"));
     assert.ok(auditActions.includes("restored_version"));
     assert.ok(auditActions.includes("viewed"));
+  });
+});
+
+describe("security checks", () => {
+  test("protected routes require authentication", async () => {
+    const routes = [
+      request("/me"),
+      request("/projects"),
+      request("/secrets"),
+      request("/audit-logs"),
+      request("/secrets/1/reveal", { method: "POST", body: { password: "anything" } })
+    ];
+
+    const results = await Promise.all(routes);
+    for (const result of results) {
+      assert.equal(result.response.status, 401);
+      assert.equal(result.data.error, "Authentication required");
+    }
+  });
+
+  test("wrong master password cannot reveal or restore secrets", async () => {
+    const user = await registerUser("wrong-password@example.com");
+    const project = await createProject(user.cookie, "wrong-password-api");
+    const secretId = await createSecret(user.cookie, project.id, user.password, {
+      value: "original-secret"
+    });
+    await editSecret(user.cookie, secretId, user.password, {
+      value: "new-secret",
+      reason: "Create version for negative test"
+    });
+
+    const versions = await request(`/secrets/${secretId}/versions`, { cookie: user.cookie });
+    assert.equal(versions.response.status, 200);
+    const versionId = versions.data.versions[0].id;
+
+    const reveal = await request(`/secrets/${secretId}/reveal`, {
+      method: "POST",
+      cookie: user.cookie,
+      body: { password: "wrong password", action: "view" }
+    });
+    assert.equal(reveal.response.status, 401);
+    assert.equal(reveal.data.error, "Password check failed");
+
+    const restore = await request(`/secrets/${secretId}/versions/${versionId}/restore`, {
+      method: "POST",
+      cookie: user.cookie,
+      body: { password: "wrong password" }
+    });
+    assert.equal(restore.response.status, 401);
+    assert.equal(restore.data.error, "Password check failed");
+
+    const current = await request(`/secrets/${secretId}/reveal`, {
+      method: "POST",
+      cookie: user.cookie,
+      body: { password: user.password, action: "view" }
+    });
+    assert.equal(current.response.status, 200);
+    assert.equal(current.data.value, "new-secret");
+  });
+
+  test("deleted secrets cannot be revealed", async () => {
+    const user = await registerUser("delete@example.com");
+    const project = await createProject(user.cookie, "delete-api");
+    const secretId = await createSecret(user.cookie, project.id, user.password, {
+      value: "delete-me"
+    });
+
+    const deleted = await request(`/secrets/${secretId}`, {
+      method: "DELETE",
+      cookie: user.cookie
+    });
+    assert.equal(deleted.response.status, 200);
+
+    const revealed = await request(`/secrets/${secretId}/reveal`, {
+      method: "POST",
+      cookie: user.cookie,
+      body: { password: user.password, action: "view" }
+    });
+    assert.equal(revealed.response.status, 404);
+    assert.equal(revealed.data.error, "Secret not found");
+  });
+
+  test("users cannot access another user's secret or version", async () => {
+    const owner = await registerUser("owner@example.com");
+    const attacker = await registerUser("attacker@example.com");
+    const project = await createProject(owner.cookie, "private-api");
+    const secretId = await createSecret(owner.cookie, project.id, owner.password, {
+      value: "owner-secret"
+    });
+    await editSecret(owner.cookie, secretId, owner.password, {
+      value: "owner-secret-new",
+      reason: "Owner rotation"
+    });
+
+    const ownerVersions = await request(`/secrets/${secretId}/versions`, { cookie: owner.cookie });
+    assert.equal(ownerVersions.response.status, 200);
+    const versionId = ownerVersions.data.versions[0].id;
+
+    const listedByAttacker = await request("/secrets", { cookie: attacker.cookie });
+    assert.equal(listedByAttacker.response.status, 200);
+    assert.equal(listedByAttacker.data.secrets.some((secret) => secret.id === secretId), false);
+
+    const revealByAttacker = await request(`/secrets/${secretId}/reveal`, {
+      method: "POST",
+      cookie: attacker.cookie,
+      body: { password: attacker.password, action: "view" }
+    });
+    assert.equal(revealByAttacker.response.status, 404);
+    assert.equal(revealByAttacker.data.error, "Secret not found");
+
+    const versionsByAttacker = await request(`/secrets/${secretId}/versions`, {
+      cookie: attacker.cookie
+    });
+    assert.equal(versionsByAttacker.response.status, 404);
+    assert.equal(versionsByAttacker.data.error, "Secret not found");
+
+    const restoreByAttacker = await request(`/secrets/${secretId}/versions/${versionId}/restore`, {
+      method: "POST",
+      cookie: attacker.cookie,
+      body: { password: attacker.password }
+    });
+    assert.equal(restoreByAttacker.response.status, 404);
+    assert.equal(restoreByAttacker.data.error, "Secret not found");
   });
 });
 
