@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:docker": "concurrently \"npm run dev:api\" \"vite --host 0.0.0.0\"",
     "dev:api": "node --watch server/index.js",
     "dev:web": "vite --host localhost",
     "vaultx": "node cli/vaultx.js",

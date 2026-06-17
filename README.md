@@ -78,6 +78,22 @@ Run tests:
 npm test
 ```
 
+## Run With Docker
+
+For a local demo container:
+
+```bash
+docker compose up --build
+```
+
+Then open:
+
+```text
+http://localhost:5173
+```
+
+The API is exposed at `http://localhost:4000`, and SQLite data is persisted in `./data`.
+
 ## CLI Usage
 
 The repo includes a local CLI named `vaultx`.
