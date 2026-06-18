@@ -21,6 +21,7 @@ import {
 import "./styles.css";
 
 const API = "http://localhost:4000/api";
+const ROTATION_SOON_DAYS = 14;
 
 async function api(path, options = {}) {
   const response = await fetch(`${API}${path}`, {
@@ -39,6 +40,30 @@ function generateSecret(length = 40) {
   const bytes = new Uint32Array(length);
   crypto.getRandomValues(bytes);
   return Array.from(bytes, (byte) => chars[byte % chars.length]).join("");
+}
+
+function parseRotationDate(value) {
+  if (!value) return null;
+  return new Date(`${value}T00:00:00`);
+}
+
+function getRotationStatus(secret) {
+  const rotationDate = parseRotationDate(secret.expires_at);
+  if (!rotationDate) {
+    return { key: "no-expiry", label: "no expiry", daysUntil: null };
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const daysUntil = Math.ceil((rotationDate - today) / 86400000);
+
+  if (daysUntil < 0) {
+    return { key: "overdue", label: "rotation due", daysUntil };
+  }
+  if (daysUntil <= ROTATION_SOON_DAYS) {
+    return { key: "due-soon", label: daysUntil === 0 ? "due today" : `due in ${daysUntil}d`, daysUntil };
+  }
+  return { key: "scheduled", label: secret.expires_at, daysUntil };
 }
 
 function App() {
@@ -124,6 +149,7 @@ function VaultScreen({ user, onLogout }) {
   const [query, setQuery] = useState("");
   const [environment, setEnvironment] = useState("all");
   const [selectedProject, setSelectedProject] = useState("all");
+  const [rotationFilter, setRotationFilter] = useState("all");
   const [notice, setNotice] = useState("");
 
   async function refresh() {
@@ -148,13 +174,31 @@ function VaultScreen({ user, onLogout }) {
   const filteredSecrets = useMemo(() => {
     return secrets.filter((secret) => {
       const haystack = `${secret.name} ${secret.project_name} ${secret.environment} ${secret.notes}`.toLowerCase();
+      const rotationStatus = getRotationStatus(secret);
       return (
         haystack.includes(query.toLowerCase()) &&
         (environment === "all" || secret.environment === environment) &&
-        (selectedProject === "all" || String(secret.project_id) === selectedProject)
+        (selectedProject === "all" || String(secret.project_id) === selectedProject) &&
+        (
+          rotationFilter === "all" ||
+          rotationStatus.key === rotationFilter ||
+          (rotationFilter === "attention" && ["overdue", "due-soon"].includes(rotationStatus.key))
+        )
       );
     });
-  }, [secrets, query, environment, selectedProject]);
+  }, [secrets, query, environment, selectedProject, rotationFilter]);
+
+  const rotationSummary = useMemo(() => {
+    return secrets.reduce(
+      (summary, secret) => {
+        const status = getRotationStatus(secret);
+        summary[status.key] += 1;
+        if (["overdue", "due-soon"].includes(status.key)) summary.attention += 1;
+        return summary;
+      },
+      { overdue: 0, "due-soon": 0, scheduled: 0, "no-expiry": 0, attention: 0 }
+    );
+  }, [secrets]);
 
   async function logout() {
     await api("/auth/logout", { method: "POST" });
@@ -204,7 +248,16 @@ function VaultScreen({ user, onLogout }) {
             <option value="staging">staging</option>
             <option value="prod">prod</option>
           </select>
+          <select value={rotationFilter} onChange={(event) => setRotationFilter(event.target.value)}>
+            <option value="all">All rotation</option>
+            <option value="attention">Needs rotation</option>
+            <option value="overdue">Overdue</option>
+            <option value="due-soon">Due soon</option>
+            <option value="no-expiry">No expiry</option>
+          </select>
         </div>
+
+        <RotationOverview summary={rotationSummary} activeFilter={rotationFilter} onFilter={setRotationFilter} />
 
         {notice && <p className="notice">{notice}</p>}
 
@@ -235,6 +288,31 @@ function VaultScreen({ user, onLogout }) {
         </div>
       </section>
     </main>
+  );
+}
+
+function RotationOverview({ summary, activeFilter, onFilter }) {
+  const metrics = [
+    { key: "attention", label: "Needs rotation", value: summary.attention },
+    { key: "overdue", label: "Overdue", value: summary.overdue },
+    { key: "due-soon", label: "Due soon", value: summary["due-soon"] },
+    { key: "no-expiry", label: "No expiry", value: summary["no-expiry"] }
+  ];
+
+  return (
+    <section className="rotation-overview" aria-label="Rotation summary">
+      {metrics.map((metric) => (
+        <button
+          key={metric.key}
+          type="button"
+          className={`rotation-metric ${activeFilter === metric.key ? "active" : ""}`}
+          onClick={() => onFilter(activeFilter === metric.key ? "all" : metric.key)}
+        >
+          <span>{metric.label}</span>
+          <strong>{metric.value}</strong>
+        </button>
+      ))}
+    </section>
   );
 }
 
@@ -465,16 +543,16 @@ function SecretCard({ secret, onChanged, onNotice }) {
     setEditForm((current) => ({ ...current, [field]: value }));
   }
 
-  const expired = secret.expires_at && new Date(secret.expires_at) < new Date();
+  const rotationStatus = getRotationStatus(secret);
 
   return (
-    <article className={`secret-card ${expired ? "expired" : ""}`}>
+    <article className={`secret-card rotation-${rotationStatus.key}`}>
       <div className="secret-main">
         <div>
           <h3>{secret.name}</h3>
           <p>{secret.project_name} / {secret.environment}</p>
         </div>
-        <span className="pill">{expired ? "rotation due" : secret.expires_at || "no expiry"}</span>
+        <span className="pill">{rotationStatus.label}</span>
       </div>
       {secret.notes && <p className="notes">{secret.notes}</p>}
       <div className="reveal-row">

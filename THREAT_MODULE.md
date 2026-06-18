@@ -95,7 +95,7 @@ Controls:
 
 Current gaps:
 
-- CLI token logout and rotation are not implemented yet.
+- CLI logout is implemented, but token rotation is not implemented yet.
 - Session timeout controls are basic.
 - Local development uses HTTP, not HTTPS.
 
@@ -131,8 +131,7 @@ Controls:
 
 Current gaps:
 
-- CLI logout is not implemented.
-- Token expiration and rotation are not exposed through the CLI.
+- Token rotation is not exposed through the CLI.
 
 ## Security Controls
 
@@ -156,17 +155,16 @@ Current gaps:
 - SQLite local storage only
 - Uses Node's experimental `node:sqlite` module
 - Metadata is not encrypted
-- CLI session token management is minimal
-- No automated security tests yet
+- CLI session token rotation is not implemented
+- Automated tests cover core backend security paths, but broader frontend and CLI coverage is still limited
 
 ## Future Hardening
 
 - Add TOTP MFA and recovery codes
-- Add CLI logout and token rotation
+- Add CLI token rotation
 - Add team workspaces and RBAC
 - Add secret access policies
 - Add PostgreSQL support
-- Add Docker Compose deployment
 - Add HTTPS production deployment guidance
 - Encrypt more metadata where practical
 - Add automated tests for authorization boundaries

@@ -251,7 +251,7 @@ textarea:focus {
 
 .toolbar {
   display: grid;
-  grid-template-columns: minmax(320px, 1fr) 190px 150px;
+  grid-template-columns: minmax(320px, 1fr) 190px 150px 170px;
   gap: 12px;
   margin-bottom: 18px;
 }
@@ -269,6 +269,40 @@ textarea:focus {
 
 .search-box input {
   padding-left: 40px;
+}
+
+.rotation-overview {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.rotation-metric {
+  display: grid;
+  gap: 6px;
+  text-align: left;
+  border: 1px solid #dce3ea;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #20303d;
+  padding: 14px;
+}
+
+.rotation-metric span {
+  color: #667785;
+  font-weight: 800;
+  font-size: 0.86rem;
+}
+
+.rotation-metric strong {
+  color: #17202a;
+  font-size: 1.45rem;
+}
+
+.rotation-metric.active {
+  border-color: #0f766e;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
 }
 
 .content-grid {
@@ -359,9 +393,14 @@ textarea:focus {
   font-weight: 800;
 }
 
-.expired .pill {
+.rotation-overdue .pill {
   background: #fee4e2;
   color: #b42318;
+}
+
+.rotation-due-soon .pill {
+  background: #fef0c7;
+  color: #93370d;
 }
 
 .reveal-row {
@@ -499,6 +538,10 @@ textarea:focus {
     grid-template-columns: 1fr;
   }
 
+  .rotation-overview {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .audit-panel {
     position: static;
   }
@@ -527,6 +570,10 @@ textarea:focus {
   }
 
   .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .rotation-overview {
     grid-template-columns: 1fr;
   }
 

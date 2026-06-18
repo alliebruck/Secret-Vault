@@ -17,6 +17,7 @@ The app is built as a small-team developer vault: users can organize secrets by 
 - Search and filtering by project, environment, name, or notes
 - Strong secret generator
 - Secret expiration dates and rotation notes
+- Rotation reminder dashboard
 - Audit logs for sensitive actions
 - Secret editing with encrypted version history
 - Restore previous secret versions
@@ -48,8 +49,6 @@ The core security model:
 - Browser sessions use HTTP-only cookies.
 - CLI sessions use bearer tokens stored locally in `~/.vaultx/config.json`.
 - The CLI never stores the master password.
-
-See [THREAT_MODULE.md](THREAT_MODULE.md) for the full threat model, assumptions, controls, and future hardening plan.
 
 ## Run Locally
 
@@ -155,6 +154,14 @@ npm run vaultx -- run --project billing-api --env dev -- node -e "console.log(pr
 10. Confirm audit events were recorded.
 11. Use the CLI to list and retrieve the same secret.
 
+## Encryption Flow
+
+1. User logs in with a password.
+2. A key is derived from the master password.
+3. The user's vault key is decrypted using the derived key.
+4. Secret values are encrypted with the vault key before storage.
+5. Decrypt operations require master-password re-entry.
+
 ## Known Limitations
 
 - SQLite uses Node's experimental `node:sqlite` module in this local version.
@@ -170,14 +177,16 @@ npm run vaultx -- run --project billing-api --env dev -- node -e "console.log(pr
 - Team workspaces and RBAC
 - CLI token rotation
 - Secret import/export
-- Rotation reminder dashboard
 - Encrypted backup flow
 - PostgreSQL migration
-- Docker Compose setup
 
 ## Resume Summary
 
-Built a full-stack developer secrets vault with Argon2id authentication, AES-256-GCM encrypted storage, audit logging, encrypted secret version history, and a Node.js CLI for injecting secrets into local development commands.
+Built a full-stack developer secrets vault using React, Express, and Node.js with Argon2id authentication, AES-256-GCM encrypted secret storage, encrypted version history, audit logging, and a CLI for securely injecting secrets into local development workflows.
+
+## Security Documentation
+
+For a detailed analysis of the application's security assumptions, attack surfaces, mitigations, and future hardening plans, see [THREAT_MODULE.md](./THREAT_MODULE.md).
 
 ## Screenshots
 
